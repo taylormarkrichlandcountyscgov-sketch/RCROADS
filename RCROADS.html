@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RCAtlas Street Maintenance Lookup</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen">
+
+    <div class="max-w-4xl mx-auto p-4 md:p-6">
+        <header class="text-center my-6">
+            <h1 class="text-3xl font-bold text-gray-900 tracking-tight">RCAtlas Street Lookup</h1>
+            <p class="text-sm text-gray-600 mt-1">Public Safety Maintenance Status Index</p>
+        </header>
+
+        <div id="setupContainer" class="hidden bg-white p-6 rounded-xl shadow-sm border border-blue-200 mb-6">
+            <h2 class="text-lg font-bold text-blue-900 mb-2">One-Time Database Activation</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                To load all 8,932 roads without chat truncation limits: Open your <strong>STREET ATLAS.csv</strong> file in Notepad (or copy the columns directly from Excel), select everything, copy it, and paste it into the box below.
+            </p>
+            <textarea id="rawCsvPaste" rows="6" placeholder="Paste data here (Ctrl+V)..." 
+                class="w-full p-3 font-mono text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+            <button onclick="initializeDatabase()" class="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded-lg transition shadow-sm">
+                Activate Full Atlas Directory
+            </button>
+        </div>
+
+        <div id="appInterface" class="space-y-6">
+            
+            <div class="flex flex-wrap items-center justify-between bg-white p-4 rounded-xl shadow-sm border border-gray-200 gap-4">
+                <div class="text-sm text-gray-600">
+                    Active Road Index: <span id="totalStreets" class="font-bold text-blue-700">0</span> records active.
+                </div>
+                <button onclick="clearDatabase()" class="px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition border border-red-100">
+                    Wipe & Reload Master Data
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div class="md:col-span-2">
+                    <label for="searchInput" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Live Search Street Directory</label>
+                    <input type="text" id="searchInput" placeholder="Type street name to check..." oninput="filterData()" 
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="typeFilter" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Filter Classification</label>
+                    <select id="typeFilter" onchange="filterData()" 
+                        class="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">All Classifications</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Street Name</th>
+                                <th scope="col" class="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Maintenance Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody" class="divide-y divide-gray-200 bg-white"></tbody>
+                    </table>
+                </div>
+                <div id="noResults" class="hidden text-center py-12 text-gray-500">No matching street found in directory.</div>
+            </div>
+
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-emerald-200 bg-emerald-50/20">
+                <h3 class="text-sm font-bold text-emerald-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add New Road (Saves Permanently to Browser)
+                </h3>
+                <form id="newRoadForm" onsubmit="addNewRoad(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <input type="text" id="newRoadName" placeholder="Street Name..." required
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+                    <div>
+                        <select id="newRoadClass" required
+                            class="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="" disabled selected>Select Status...</option>
+                            <option value="SCDOT">SCDOT (State)</option>
+                            <option value="County Paved">County Paved</option>
+                            <option value="County Unpaved">County Unpaved</option>
+                            <option value="Columbia">Columbia (City)</option>
+                            <option value="Private or Other">Private or Other</option>
+                            <option value="Federal">Federal</option>
+                            <option value="Interstate">Interstate</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="w-full px-4 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition">
+                            Save Road
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let streetData = [];
+
+        // Exact Request Public Safety Color Coding Configuration
+        const badgeStyles = {
+            'scdot': 'bg-amber-800 text-white border-amber-900 font-bold', // Brown
+            'county paved': 'bg-red-600 text-white border-red-700 font-bold', // Red
+            'county unpaved': 'bg-red-800 text-white border-red-900 font-bold', // Red
+            'private or other': 'bg-yellow-400 text-gray-900 border-yellow-500 font-bold', // Yellow
+            'columbia': 'bg-blue-600 text-white border-blue-700 font-bold', // Blue
+            'default': 'bg-gray-200 text-gray-800 border-gray-300'
+        };
+
+        window.onload = function() {
+            const preservedData = localStorage.getItem('rc_atlas_master_all_in_one');
+            if (preservedData) {
+                streetData = JSON.parse(preservedData);
+                document.getElementById('setupContainer').classList.add('hidden');
+                buildFilterDropdown();
+                updateInterfaceUI();
+            } else {
+                document.getElementById('setupContainer').classList.remove('hidden');
+            }
+        };
+
+        // Reads pasted text line-by-line natively to dodge single-line truncation restrictions
+        function initializeDatabase() {
+            const pasteContent = document.getElementById('rawCsvPaste').value;
+            if (!pasteContent.trim()) {
+                alert("Please paste data text into the container box to initialize.");
+                return;
+            }
+
+            const lines = pasteContent.split('\n');
+            const processedData = [];
+
+            lines.forEach(line => {
+                if (!line.trim()) return;
+                
+                // Splitting on commas or tabs depending on if it came from Excel or a raw CSV
+                const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+                if (parts.length >= 2) {
+                    const name = parts[0].replace(/^["']|["']$/g, '').trim();
+                    const classification = parts[1].replace(/^["']|["']$/g, '').trim();
+                    
+                    if (name && classification && name.toLowerCase() !== 'street name' && classification !== '__PowerAppsId__') {
+                        processedData.push({ name, classification, isManual: false });
+                    }
+                }
+            });
+
+            if (processedData.length === 0) {
+                alert("Could not extract any data rows. Ensure you copied columns directly from the file.");
+                return;
+            }
+
+            streetData = processedData;
+            localStorage.setItem('rc_atlas_master_all_in_one', JSON.stringify(streetData));
+            
+            document.getElementById('setupContainer').classList.add('hidden');
+            buildFilterDropdown();
+            updateInterfaceUI();
+        }
+
+        function buildFilterDropdown() {
+            const uniqueTypes = [...new Set(streetData.map(item => item.classification))].sort();
+            const filterDropdown = document.getElementById('typeFilter');
+            filterDropdown.innerHTML = '<option value="">All Classifications</option>';
+            uniqueTypes.forEach(type => {
+                if(type) {
+                    const opt = document.createElement('option');
+                    opt.value = type;
+                    opt.textContent = type;
+                    filterDropdown.appendChild(opt);
+                }
+            });
+        }
+
+        function updateInterfaceUI() {
+            document.getElementById('totalStreets').textContent = streetData.length.toLocaleString();
+            filterData();
+        }
+
+        function addNewRoad(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('newRoadName');
+            const classSelect = document.getElementById('newRoadClass');
+
+            const newRoad = {
+                name: nameInput.value.trim(),
+                classification: classSelect.value,
+                isManual: true
+            };
+
+            streetData.unshift(newRoad);
+            localStorage.setItem('rc_atlas_master_all_in_one', JSON.stringify(streetData));
+
+            buildFilterDropdown();
+            updateInterfaceUI();
+
+            document.getElementById('searchInput').value = newRoad.name;
+            filterData();
+
+            nameInput.value = '';
+            classSelect.value = '';
+        }
+
+        function filterData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const selectedType = document.getElementById('typeFilter').value;
+            const tbody = document.getElementById('resultsTableBody');
+            const noResults = document.getElementById('noResults');
+            
+            tbody.innerHTML = '';
+
+            const filtered = streetData.filter(item => {
+                const matchesSearch = item.name.toLowerCase().includes(searchTerm);
+                const matchesType = !selectedType || item.classification === selectedType;
+                return matchesSearch && matchesType;
+            });
+
+            if (filtered.length === 0) {
+                noResults.classList.remove('hidden');
+                return;
+            }
+            noResults.classList.add('hidden');
+
+            // Capping visibility output keeps rendering lag down to absolute zero
+            const displayLimit = Math.min(filtered.length, 250);
+            for (let i = 0; i < displayLimit; i++) {
+                const item = filtered[i];
+                const tr = document.createElement('tr');
+                tr.className = item.isManual ? "bg-emerald-50/40 hover:bg-emerald-50 transition-colors font-medium" : "hover:bg-gray-50 transition-colors";
+                
+                const classKey = item.classification.toLowerCase();
+                const badgeClass = badgeStyles[classKey] || badgeStyles['default'];
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4 text-gray-900 font-medium flex items-center gap-2">
+                        ${item.name}
+                        ${item.isManual ? '<span class="text-[10px] bg-emerald-600 text-white font-bold uppercase px-1.5 py-0.5 rounded tracking-wider shadow-sm">Added</span>' : ''}
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="inline-flex items-center px-3 py-1 rounded-full text-xs border ${badgeClass}">
+                            ${item.classification}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            if (filtered.length > 250) {
+                const tr = document.createElement('tr');
+                tr.className = "bg-gray-50 text-center";
+                tr.innerHTML = `
+                    <td colspan="2" class="px-6 py-3 text-xs text-gray-400 italic">
+                        Showing first 250 of ${filtered.length} matching entries. Refine query text to narrow listings.
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+        }
+
+        function clearDatabase() {
+            if (confirm("Are you sure you want to clear the saved directory database?")) {
+                localStorage.removeItem('rc_atlas_master_all_in_one');
+                location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
